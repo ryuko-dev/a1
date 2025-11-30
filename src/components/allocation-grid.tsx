@@ -121,6 +121,51 @@ export function AllocationGrid() {
               View: {viewMode === 'percentage' ? '%' : 'Days'}
             </button>
             <button
+              onClick={() => {
+                // Add project logic
+                const projectName = prompt("Enter project name:")
+                if (projectName) {
+                  const newProject = {
+                    id: Date.now().toString(),
+                    name: projectName,
+                    startMonth: startMonth,
+                    startYear: startYear
+                  }
+                  setProjects([...projects, newProject])
+                }
+              }}
+              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              + Project
+            </button>
+            <button
+              onClick={() => {
+                // Add staff logic
+                const userName = prompt("Enter staff name:")
+                const department = prompt("Enter department:")
+                if (userName && department) {
+                  const newUser = {
+                    id: Date.now().toString(),
+                    name: userName,
+                    department: department
+                  }
+                  setUsers([...users, newUser])
+                }
+              }}
+              className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              + Staff
+            </button>
+            <button
+              onClick={() => {
+                // Settings logic - show simple settings
+                alert("Settings panel would open here")
+              }}
+              className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
+            >
+              Settings
+            </button>
+            <button
               onClick={handleLogout}
               className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
             >
