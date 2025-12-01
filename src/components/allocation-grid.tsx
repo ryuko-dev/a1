@@ -245,8 +245,17 @@ export function AllocationGrid() {
         positions: positions.length,
         entities: entities.length
       })
+      console.log("[v0] Projects being saved:", projects.map(p => ({ id: p.id, name: p.name })))
       // Save ALL current data in one call
       setCurrentUserData({ projects, users, allocations, positions, entities })
+        .then(() => {
+          console.log("[v0] Data saved successfully")
+        })
+        .catch(error => {
+          console.error("[v0] Failed to save data:", error)
+        })
+    } else {
+      console.log("[v0] Not saving data - currentUser:", currentUser, "window:", typeof window !== 'undefined')
     }
   }, [projects, users, allocations, positions, entities, currentUser])
 
@@ -3214,7 +3223,7 @@ export function AllocationGrid() {
                   
                   if (name && email && password) {
                     // Add to system users via storage
-                    import('../lib/storage').then(({ getSystemUsers }) => {
+                    import('../lib/storage-enhanced').then(({ getSystemUsers }) => {
                       getSystemUsers().then(systemUsers => {
                         const newUser = {
                           id: Date.now().toString(),

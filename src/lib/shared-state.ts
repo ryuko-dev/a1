@@ -1,5 +1,5 @@
 // Shared state management for SolaFire
-import { getCurrentUser } from "./storage"
+import { getCurrentUser } from "./storage-enhanced"
 
 interface SharedMonthYear {
   month: number

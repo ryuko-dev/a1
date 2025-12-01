@@ -1,7 +1,7 @@
 // Permission system for SolaFire
 import type { SystemUser } from "./azure"
 
-export type UserRole = 'admin' | 'senior' | 'user'
+export type UserRole = 'admin' | 'senior' | 'editor' | 'viewer'
 
 export function canEditPage(role: UserRole): boolean {
   return role === 'admin' || role === 'senior'

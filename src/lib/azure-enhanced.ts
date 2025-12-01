@@ -1,11 +1,10 @@
 // Enhanced Azure Cosmos DB Table API for SolaFire with 3-table structure
 import { TableClient, TableServiceClient, AzureSASCredential, odata } from "@azure/data-tables"
 
-// Azure configuration
-const azureConfig = {
-  accountName: process.env.AZURE_STORAGE_ACCOUNT_NAME || "sola1",
-  accountKey: process.env.AZURE_STORAGE_ACCOUNT_KEY || ""
-}
+// Azure configuration - support both connection string and separate credentials (like legacy)
+const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING || ""
+const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME || "sola1"
+const accountKey = process.env.AZURE_STORAGE_ACCOUNT_KEY || ""
 
 // Table names
 const TABLE_NAMES = {
@@ -14,33 +13,26 @@ const TABLE_NAMES = {
   LOCK_STATES: "solalockstates"
 }
 
+// Determine if we're using connection string or separate credentials
+const useConnectionString = connectionString && connectionString.trim() !== ""
+
+console.log('[Azure Enhanced] Configuration:', {
+  useConnectionString,
+  hasConnectionString: !!connectionString,
+  connectionStringLength: connectionString.length,
+  accountName,
+  hasAccountKey: !!accountKey,
+  accountKeyLength: accountKey.length
+})
+
 // Check if Azure is properly configured
-const isAzureConfigured = azureConfig.accountKey && azureConfig.accountKey.trim() !== ""
+const isAzureConfigured: boolean = Boolean(useConnectionString && connectionString.trim() !== "")
 
 // Create TableServiceClient only if Azure is configured
-const tableService = isAzureConfigured ? new TableServiceClient(
-  `https://${azureConfig.accountName}.table.core.windows.net`,
-  new AzureSASCredential(azureConfig.accountKey)
-) : null
-
-// Create TableClients for each table
-const mainTableClient = isAzureConfigured ? new TableClient(
-  `https://${azureConfig.accountName}.table.core.windows.net`,
-  TABLE_NAMES.MAIN_DATA,
-  new AzureSASCredential(azureConfig.accountKey)
-) : null
-
-const monthlyAllocationTableClient = isAzureConfigured ? new TableClient(
-  `https://${azureConfig.accountName}.table.core.windows.net`,
-  TABLE_NAMES.MONTHLY_ALLOCATION,
-  new AzureSASCredential(azureConfig.accountKey)
-) : null
-
-const lockStatesTableClient = isAzureConfigured ? new TableClient(
-  `https://${azureConfig.accountName}.table.core.windows.net`,
-  TABLE_NAMES.LOCK_STATES,
-  new AzureSASCredential(azureConfig.accountKey)
-) : null
+let tableService: TableServiceClient | null = null
+let mainTableClient: TableClient | null = null
+let monthlyAllocationTableClient: TableClient | null = null
+let lockStatesTableClient: TableClient | null = null
 
 // Interfaces for the new table structure
 export interface MonthlyAllocationItem {
@@ -52,7 +44,12 @@ export interface MonthlyAllocationItem {
   amount: number
   project: string
   projectTask: string
-  account: string
+}
+
+export interface MonthlyAllocationData {
+  partitionKey: string
+  rowKey: string
+  items: MonthlyAllocationItem[]
 }
 
 export interface LockState {
@@ -61,12 +58,6 @@ export interface LockState {
   isLocked: boolean
   lockedBy?: string
   lockedAt?: string
-}
-
-export interface MonthlyAllocationData {
-  partitionKey: string
-  rowKey: string
-  items: MonthlyAllocationItem[]
 }
 
 // Enhanced Azure Storage class
@@ -78,6 +69,29 @@ export class AzureStorageEnhanced {
       AzureStorageEnhanced.instance = new AzureStorageEnhanced()
     }
     return AzureStorageEnhanced.instance
+  }
+
+  constructor() {
+    // Initialize clients when singleton is created
+    if (isAzureConfigured && !mainTableClient) {
+      try {
+        // ONLY use connection string approach (proven to work)
+        tableService = TableServiceClient.fromConnectionString(connectionString)
+        mainTableClient = TableClient.fromConnectionString(connectionString, TABLE_NAMES.MAIN_DATA)
+        monthlyAllocationTableClient = TableClient.fromConnectionString(connectionString, TABLE_NAMES.MONTHLY_ALLOCATION)
+        lockStatesTableClient = TableClient.fromConnectionString(connectionString, TABLE_NAMES.LOCK_STATES)
+        console.log('[Azure Enhanced] Using connection string approach only')
+        console.log('[Azure Enhanced] mainTableClient created:', !!mainTableClient)
+      } catch (error: any) {
+        console.error('[Azure Enhanced] Failed to create clients:', error.message)
+        tableService = null
+        mainTableClient = null
+        monthlyAllocationTableClient = null
+        lockStatesTableClient = null
+      }
+    } else if (!isAzureConfigured) {
+      console.log('[Azure Enhanced] Azure not configured')
+    }
   }
 
   async initializeTables(): Promise<void> {
@@ -119,10 +133,10 @@ export class AzureStorageEnhanced {
     }
 
     try {
-      console.log('[Azure Enhanced] Querying entities with PartitionKey eq "global"')
+      console.log('[Azure Enhanced] Querying entities with PartitionKey eq "globaldata"')
       const entities = mainTableClient.listEntities({
         queryOptions: {
-          filter: odata`PartitionKey eq 'global'`
+          filter: odata`PartitionKey eq 'globaldata'`
         }
       })
 
@@ -178,11 +192,13 @@ export class AzureStorageEnhanced {
   }
 
   async setMainData(data: any): Promise<void> {
-    if (!mainTableClient) return
+    if (!mainTableClient) {
+      throw new Error('Azure Enhanced: mainTableClient not available')
+    }
 
     try {
       const entity = {
-        partitionKey: "global",
+        partitionKey: "globaldata",
         rowKey: "main",
         data: JSON.stringify(data)
       }
@@ -191,6 +207,7 @@ export class AzureStorageEnhanced {
       console.log("Main data saved to Azure successfully")
     } catch (error) {
       console.error("Failed to save main data to Azure:", error)
+      throw error
     }
   }
 
