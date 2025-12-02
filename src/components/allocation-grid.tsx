@@ -173,16 +173,47 @@ export function AllocationGrid() {
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
 
   // Grid starting month/year (top-right selectors). Persist per user.
-  const [startMonth, setStartMonth] = useState<number>(0)
-  const [startYear, setStartYear] = useState<number>(2024)
+  const [startMonth, setStartMonth] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      // Prefer group-specific local key, fall back to generic selected-month
+      const storedGroup = localStorage.getItem('sola-start-alloc-planning')
+      if (storedGroup) {
+        try {
+          const parsed = JSON.parse(storedGroup)
+          if (typeof parsed.month === 'number') return parsed.month
+        } catch {}
+      }
+      const stored = localStorage.getItem('sola-selected-month')
+      if (stored) return Number(stored)
+      return new Date().getMonth()
+    }
+    return 0
+  })
+
+  const [startYear, setStartYear] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const storedGroup = localStorage.getItem('sola-start-alloc-planning')
+      if (storedGroup) {
+        try {
+          const parsed = JSON.parse(storedGroup)
+          if (typeof parsed.year === 'number') return parsed.year
+        } catch {}
+      }
+      const stored = localStorage.getItem('sola-selected-year')
+      if (stored) return Number(stored)
+      return new Date().getFullYear()
+    }
+    return 2024
+  })
 
   // Load initial settings
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const userData = await getCurrentUserData()
-        setStartMonth(userData.startMonth ?? 0)
-        setStartYear(userData.startYear ?? 2024)
+        const { getStartForGroup } = await import("@/lib/start-settings")
+        const { month, year } = await getStartForGroup('allocPlanning')
+        setStartMonth(month ?? 0)
+        setStartYear(year ?? 2024)
       } catch (error) {
         console.error("Failed to load settings:", error)
       }
@@ -193,12 +224,12 @@ export function AllocationGrid() {
   // Persist starting month/year when they change
   useEffect(() => {
     if (typeof window !== 'undefined' && currentUser) {
-      // 🚨 CRITICAL FIX: Use updateUserSettings to avoid overwriting data
-      console.log('[DEBUG] Saving startMonth/startYear settings without overwriting data')
-      updateUserSettings({ startMonth, startYear })
-        .catch(error => {
-          console.error('[DEBUG] Failed to save settings:', error)
+      console.log('[DEBUG] Saving startMonth/startYear for allocPlanning group')
+      import("@/lib/start-settings").then(({ setStartForGroup }) => {
+        setStartForGroup('allocPlanning', startMonth, startYear).catch(error => {
+          console.error('[DEBUG] Failed to save group start settings:', error)
         })
+      }).catch(err => console.error('Failed to load start-settings:', err))
     }
   }, [startMonth, startYear, currentUser])
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -568,8 +599,24 @@ export function AllocationGrid() {
           })
         }
         const pos = positionMap.get(name)!
-        // Use days if available, otherwise use percentage
-        const value = project.allocationMode === 'days' && p.days ? p.days : p.percentage
+        // If project allocationMode is 'days' prefer stored `days` value. If not present,
+        // convert stored percentage back to days using the month working days.
+        let value: number = 0
+        if (project.allocationMode === 'days') {
+          if (typeof p.days === 'number') {
+            value = p.days
+          } else if (typeof p.percentage === 'number') {
+            const year = Math.floor(p.monthIndex / 12) + 2024
+            const month = p.monthIndex % 12
+            const workingDays = getWorkingDaysInMonth(year, month, 1)
+            value = Math.round((p.percentage / 100) * workingDays)
+          } else {
+            value = 0
+          }
+        } else {
+          // percentage mode: prefer percentage value
+          value = typeof p.percentage === 'number' ? p.percentage : 0
+        }
         console.log('[DEBUG] Loading position:', name, 'month:', p.monthIndex, 'value:', value, 'mode:', project.allocationMode)
         pos.budgets[p.monthIndex] = value
       })
@@ -623,6 +670,8 @@ export function AllocationGrid() {
               projectId: editingProjectId,
               monthIndex: projectMonth.globalIndex,
               percentage: percentageValue,
+              // If allocation mode is days, store the original days value as well
+              days: allocationMode === 'days' ? value : undefined,
               allocated: 0,
               name: positionBudget.name,
               projectTask: positionBudget.projectTask,
@@ -678,6 +727,8 @@ export function AllocationGrid() {
               projectId: newProject.id,
               monthIndex: projectMonth.globalIndex,
               percentage: percentageValue,
+              // Preserve entered days when project is in 'days' mode
+              days: allocationMode === 'days' ? value : undefined,
               allocated: 0,
               name: positionBudget.name,
               projectTask: positionBudget.projectTask,

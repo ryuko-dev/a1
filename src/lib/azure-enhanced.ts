@@ -197,14 +197,68 @@ export class AzureStorageEnhanced {
     }
 
     try {
+      // Server-side safe merge: avoid blind replace of the single-blob entity.
+      // Fetch existing data and merge collections by id where possible.
+      const existing = await this.getMainData()
+
+      const merged: any = { ...existing }
+
+      const arrayKeys = ['projects', 'users', 'allocations', 'positions', 'entities', 'expenses', 'scheduledRecords']
+
+      for (const key of arrayKeys) {
+        const incoming = data[key]
+
+        // If incoming is undefined, leave existing as-is
+        if (incoming === undefined) continue
+
+        // If incoming is an empty array, treat as NO-OP to avoid accidental deletions
+        if (Array.isArray(incoming) && incoming.length === 0) {
+          console.log(`[Azure Enhanced] Skipping empty incoming array for '${key}' to prevent accidental overwrite`)
+          continue
+        }
+
+        // If incoming is an array with items, merge by id where possible
+        if (Array.isArray(incoming)) {
+          const existingArr = Array.isArray(existing[key]) ? existing[key] : []
+          const map: Record<string, any> = {}
+
+          for (const item of existingArr) {
+            if (item && item.id) map[item.id] = item
+          }
+
+          for (const item of incoming) {
+            if (item && item.id) {
+              map[item.id] = { ...(map[item.id] || {}), ...item }
+            } else {
+              // Items without id: push as-is (use timestamp-based id to avoid collisions)
+              const genId = `gen-${Date.now()}-${Math.floor(Math.random()*10000)}`
+              map[genId] = item
+            }
+          }
+
+          merged[key] = Object.values(map)
+          continue
+        }
+
+        // Non-array incoming value: replace/assign
+        merged[key] = incoming
+      }
+
+      // Copy other top-level scalar values from incoming (e.g., startMonth_allocPlanning)
+      for (const k of Object.keys(data)) {
+        if (!arrayKeys.includes(k)) {
+          merged[k] = data[k]
+        }
+      }
+
       const entity = {
-        partitionKey: "globaldata",
-        rowKey: "main",
-        data: JSON.stringify(data)
+        partitionKey: 'globaldata',
+        rowKey: 'main',
+        data: JSON.stringify(merged)
       }
 
       await mainTableClient.upsertEntity(entity)
-      console.log("Main data saved to Azure successfully")
+      console.log('Main data saved to Azure successfully (merged)')
     } catch (error) {
       console.error("Failed to save main data to Azure:", error)
       throw error

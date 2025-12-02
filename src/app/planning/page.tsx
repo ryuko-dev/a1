@@ -10,8 +10,37 @@ export default function PlanningPage() {
   const [users, setUsers] = useState<any[]>([])
   const [allocations, setAllocations] = useState<any[]>([])
   const [positions, setPositions] = useState<any[]>([])
-  const [startMonth, setStartMonth] = useState(0)
-  const [startYear, setStartYear] = useState(2024)
+    const [startMonth, setStartMonth] = useState<number>(() => {
+      if (typeof window !== 'undefined') {
+        const storedGroup = localStorage.getItem('sola-start-alloc-planning')
+        if (storedGroup) {
+          try {
+            const parsed = JSON.parse(storedGroup)
+            if (typeof parsed.month === 'number') return parsed.month
+          } catch {}
+        }
+        const stored = localStorage.getItem('sola-selected-month')
+        if (stored) return Number(stored)
+        return new Date().getMonth()
+      }
+      return 0
+    })
+
+    const [startYear, setStartYear] = useState<number>(() => {
+      if (typeof window !== 'undefined') {
+        const storedGroup = localStorage.getItem('sola-start-alloc-planning')
+        if (storedGroup) {
+          try {
+            const parsed = JSON.parse(storedGroup)
+            if (typeof parsed.year === 'number') return parsed.year
+          } catch {}
+        }
+        const stored = localStorage.getItem('sola-selected-year')
+        if (stored) return Number(stored)
+        return new Date().getFullYear()
+      }
+      return 2024
+    })
 
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -90,9 +119,10 @@ export default function PlanningPage() {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const userData = await getCurrentUserData()
-        setStartMonth(userData.startMonth ?? 0)
-        setStartYear(userData.startYear ?? 2024)
+        const { getStartForGroup } = await import('@/lib/start-settings')
+        const { month, year } = await getStartForGroup('allocPlanning')
+        setStartMonth(month ?? 0)
+        setStartYear(year ?? 2024)
       } catch (error) {
         console.error('Failed to load settings:', error)
       }
@@ -100,15 +130,15 @@ export default function PlanningPage() {
     loadSettings()
   }, [])
 
-  // Persist starting month/year when they change
+  // Persist starting month/year for the allocPlanning group when they change
   useEffect(() => {
     if (typeof window !== 'undefined' && currentUser) {
-      // 🚨 CRITICAL FIX: Use updateUserSettings to avoid overwriting data
-      console.log('[PlanningPage] Saving startMonth/startYear settings without overwriting data')
-      updateUserSettings({ startMonth, startYear })
-        .catch(error => {
-          console.error('[PlanningPage] Failed to save settings:', error)
+      console.log('[PlanningPage] Saving allocPlanning startMonth/startYear')
+      import('@/lib/start-settings').then(({ setStartForGroup }) => {
+        setStartForGroup('allocPlanning', startMonth, startYear).catch(error => {
+          console.error('[PlanningPage] Failed to save group settings:', error)
         })
+      }).catch(err => console.error('Failed to load start-settings:', err))
     }
   }, [startMonth, startYear, currentUser])
 

@@ -1,8 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { azureStorageEnhanced } from '@/lib/azure-enhanced'
+import fs from 'fs'
+import path from 'path'
+
+const DEBUG_WRITES_ALLOWED = process.env.ALLOW_DEBUG_WRITES === 'true'
 
 export async function POST(request: NextRequest) {
   try {
+    if (!DEBUG_WRITES_ALLOWED) {
+      return NextResponse.json({ error: 'Debug writes are disabled. Set ALLOW_DEBUG_WRITES=true to enable.' }, { status: 403 })
+    }
+
+    // Audit log for debug enhanced-post-test
+    try {
+      const logPath = path.join(process.cwd(), 'azure-writes.log')
+      const entry = {
+        timestamp: new Date().toISOString(),
+        route: '/api/debug/enhanced-post-test',
+        allowed: DEBUG_WRITES_ALLOWED,
+        headers: Object.fromEntries(request.headers.entries())
+      }
+      fs.appendFileSync(logPath, JSON.stringify(entry) + '\n')
+    } catch (e) {
+      console.error('Failed to write azure-writes.log:', e)
+    }
+
     console.log('[DEBUG] Starting enhanced storage POST test...')
     
     // Test 1: Get singleton instance

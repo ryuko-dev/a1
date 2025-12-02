@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "show-log": "node -e \"console.log(require('fs').readFileSync('log.md','utf8'))\""
   },
   "dependencies": {
     "@azure/data-tables": "^13.3.2",

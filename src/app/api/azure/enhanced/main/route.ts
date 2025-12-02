@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { azureStorageEnhanced } from '@/lib/azure-enhanced'
+import fs from 'fs'
+import path from 'path'
 
 export async function GET() {
   try {
@@ -25,6 +27,27 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
+
+    // Detailed audit logging of incoming write attempts
+    try {
+      const logPath = path.join(process.cwd(), 'azure-writes.log')
+      const entry = {
+        timestamp: new Date().toISOString(),
+        route: '/api/azure/enhanced/main',
+        incomingCounts: {
+          projects: data.projects?.length || 0,
+          users: data.users?.length || 0,
+          allocations: data.allocations?.length || 0,
+          positions: data.positions?.length || 0,
+          entities: data.entities?.length || 0
+        },
+        headers: Object.fromEntries(request.headers.entries())
+      }
+      fs.appendFileSync(logPath, JSON.stringify(entry) + '\n')
+    } catch (e) {
+      console.error('[API] Failed to write azure-writes.log:', e)
+    }
+
     console.log('[API] 🔴 POST /api/azure/enhanced/main - Raw request data:', data)
     
     const totalItems = (data.projects?.length || 0) + (data.users?.length || 0) + (data.allocations?.length || 0) + (data.positions?.length || 0) + (data.entities?.length || 0)

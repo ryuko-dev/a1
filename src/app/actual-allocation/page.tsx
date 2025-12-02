@@ -5,7 +5,7 @@ import * as XLSX from "xlsx"
 import type { User, Project, Allocation, Position, Entity } from "@/lib/types"
 import { getCurrentUser, getGlobalData, getCurrentSystemUser, getSystemUsers, clearCurrentUser, getCurrentUserData, setCurrentUserData, getMonthlyAllocation, setMonthlyAllocation as saveMonthlyAllocation, getLockState, setLockState } from "@/lib/storage-enhanced"
 import { canEditPage, canAccessTab, UserRole, canLockPayroll as canLockPayrollRole } from "@/lib/permissions"
-import { getSharedMonthYear, setSharedMonthYear } from "@/lib/shared-state"
+// shared-state no longer used here; using group-specific start-settings
 import { Button } from "@/components/ui/button"
 import { Navigation } from "@/components/navigation"
 
@@ -58,10 +58,38 @@ export default function ActualAllocationPage() {
   const [entities, setEntities] = React.useState<any[]>([])
   const [allocations, setAllocations] = React.useState<any[]>([]) // Load staff allocations
   
-  // Initialize with shared month/year state
-  const sharedState = getSharedMonthYear()
-  const [selectedMonth, setSelectedMonth] = React.useState<number>(sharedState.month)
-  const [selectedYear, setSelectedYear] = React.useState<number>(sharedState.year)
+  // Initialize with persisted group-specific start settings (expense/scheduled/payroll)
+  const [selectedMonth, setSelectedMonth] = React.useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const storedGroup = localStorage.getItem('sola-start-expense-payroll')
+      if (storedGroup) {
+        try {
+          const parsed = JSON.parse(storedGroup)
+          if (typeof parsed.month === 'number') return parsed.month
+        } catch {}
+      }
+      const stored = localStorage.getItem('sola-selected-month')
+      if (stored) return Number(stored)
+      return new Date().getMonth()
+    }
+    return new Date().getMonth()
+  })
+
+  const [selectedYear, setSelectedYear] = React.useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const storedGroup = localStorage.getItem('sola-start-expense-payroll')
+      if (storedGroup) {
+        try {
+          const parsed = JSON.parse(storedGroup)
+          if (typeof parsed.year === 'number') return parsed.year
+        } catch {}
+      }
+      const stored = localStorage.getItem('sola-selected-year')
+      if (stored) return Number(stored)
+      return new Date().getFullYear()
+    }
+    return new Date().getFullYear()
+  })
   
   const [isLocked, setIsLocked] = React.useState<boolean>(false)
   const [monthlyAllocation, setMonthlyAllocation] = React.useState<MonthlyAllocationItem[]>([])
@@ -73,12 +101,30 @@ export default function ActualAllocationPage() {
   const updateMonthYear = React.useCallback((month: number, year: number) => {
     setSelectedMonth(month)
     setSelectedYear(year)
-    setSharedMonthYear(month, year)
+    // Persist to expensePayroll group
+    import('@/lib/start-settings').then(({ setStartForGroup }) => {
+      setStartForGroup('expensePayroll', month, year).catch(err => console.error('Failed to save group start:', err))
+    }).catch(err => console.error('Failed to load start-settings:', err))
   }, [])
 
   // Handle client-side hydration
   React.useEffect(() => {
     setIsClient(true)
+  }, [])
+
+  // Load persisted start settings for expensePayroll group on mount
+  React.useEffect(() => {
+    const load = async () => {
+      try {
+        const { getStartForGroup } = await import('@/lib/start-settings')
+        const { month, year } = await getStartForGroup('expensePayroll')
+        setSelectedMonth(month)
+        setSelectedYear(year)
+      } catch (error) {
+        console.error('Failed to load expense group start settings:', error)
+      }
+    }
+    load()
   }, [])
 
   // Load user data on component mount

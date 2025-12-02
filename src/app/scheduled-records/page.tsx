@@ -4,7 +4,7 @@ import * as React from "react"
 import { Navigation } from "@/components/navigation"
 import { canEditPage, UserRole } from "@/lib/permissions"
 import { getCurrentSystemUser } from "@/lib/storage-enhanced"
-import { getSharedMonthYear, setSharedMonthYear } from "@/lib/shared-state"
+// using group-specific start-settings for persistence
 import { Button } from "@/components/ui/button"
 
 const MONTHS = [
@@ -29,10 +29,38 @@ interface ScheduledRecord {
 export default function ScheduledRecordsPage() {
   const [currentUserRole, setCurrentUserRole] = React.useState<UserRole | null>(null)
   
-  // Initialize with shared month/year state
-  const sharedState = getSharedMonthYear()
-  const [selectedMonth, setSelectedMonth] = React.useState<number>(sharedState.month)
-  const [selectedYear, setSelectedYear] = React.useState<number>(sharedState.year)
+  // Initialize with shared month/year state (expense/scheduled/payroll group)
+  const [selectedMonth, setSelectedMonth] = React.useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const storedGroup = localStorage.getItem('sola-start-expense-payroll')
+      if (storedGroup) {
+        try {
+          const parsed = JSON.parse(storedGroup)
+          if (typeof parsed.month === 'number') return parsed.month
+        } catch {}
+      }
+      const stored = localStorage.getItem('sola-selected-month')
+      if (stored) return Number(stored)
+      return new Date().getMonth()
+    }
+    return new Date().getMonth()
+  })
+
+  const [selectedYear, setSelectedYear] = React.useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const storedGroup = localStorage.getItem('sola-start-expense-payroll')
+      if (storedGroup) {
+        try {
+          const parsed = JSON.parse(storedGroup)
+          if (typeof parsed.year === 'number') return parsed.year
+        } catch {}
+      }
+      const stored = localStorage.getItem('sola-selected-year')
+      if (stored) return Number(stored)
+      return new Date().getFullYear()
+    }
+    return new Date().getFullYear()
+  })
   
   const [selectedEntity, setSelectedEntity] = React.useState<string | null>(null)
   const [showEntityUsers, setShowEntityUsers] = React.useState<boolean>(false)
@@ -61,14 +89,20 @@ export default function ScheduledRecordsPage() {
   const updateMonthYear = React.useCallback((month: number, year: number) => {
     setSelectedMonth(month)
     setSelectedYear(year)
-    setSharedMonthYear(month, year)
+    import('@/lib/start-settings').then(({ setStartForGroup }) => {
+      setStartForGroup('expensePayroll', month, year).catch(err => console.error('Failed to save group start:', err))
+    }).catch(err => console.error('Failed to load start-settings:', err))
   }, [])
 
-  // Save month/year to localStorage when they change
+  // Persist selected month/year to group-specific storage when they change
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('sola-selected-month', selectedMonth.toString())
-      localStorage.setItem('sola-selected-year', selectedYear.toString())
+      try {
+        const groupKey = JSON.stringify({ month: selectedMonth, year: selectedYear })
+        localStorage.setItem('sola-start-expense-payroll', groupKey)
+      } catch (err) {
+        console.error('Failed to write group start key to localStorage:', err)
+      }
     }
   }, [selectedMonth, selectedYear])
 
@@ -84,6 +118,21 @@ export default function ScheduledRecordsPage() {
       }
     }
     loadUserRole()
+  }, [])
+
+  // Load persisted group start settings on mount
+  React.useEffect(() => {
+    const load = async () => {
+      try {
+        const { getStartForGroup } = await import('@/lib/start-settings')
+        const { month, year } = await getStartForGroup('expensePayroll')
+        setSelectedMonth(month)
+        setSelectedYear(year)
+      } catch (error) {
+        console.error('Failed to load expense group start settings:', error)
+      }
+    }
+    load()
   }, [])
 
   // Load records from Azure storage for each table
