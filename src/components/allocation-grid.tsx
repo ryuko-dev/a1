@@ -1403,7 +1403,7 @@ export function AllocationGrid() {
                 ...p,
                 positions: p.positions?.map((pos: Position) =>
                   pos.monthIndex === allocation.monthIndex && pos.name === allocation.positionName
-                    ? { ...pos, allocated: Math.max(0, (pos.allocated || 0) - 1) }
+                    ? { ...pos, allocated: Math.max(0, (pos.allocated || 0) - (allocation.percentage || 0)) }
                     : pos,
                 ),
               }

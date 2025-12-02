@@ -94,131 +94,70 @@ export default function AzureDataViewer() {
       await loadLocalStorageData()
     }
     
-    // Load monthly allocations for all available months
+    // Load monthly allocations for all available months via enhanced API
     const allocationData: MonthlyAllocationData[] = []
-    
-    console.log('[Azure Data Viewer] NEW CODE: Loading monthly allocations with user-specific pattern')
-    
-    // Debug: Check all allocation-related keys and their contents
-    console.log('[Azure Data Viewer] Checking all allocation-related keys:')
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key && (key.includes('allocation') || key.includes('Allocation'))) {
-        const data = localStorage.getItem(key)
-        console.log(`[Azure Data Viewer] Key: ${key}`)
-        console.log(`[Azure Data Viewer] Data:`, data)
-        console.log(`[Azure Data Viewer] Data length:`, data?.length || 0)
-        console.log('---')
-      }
-    }
-    
-    // Discover all available months from localStorage (monthly allocations have actual data)
-    const availableMonths: string[] = []
-    console.log('[Azure Data Viewer] Starting month discovery - checking all localStorage keys:')
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      console.log(`[Azure Data Viewer] Checking key ${i}: ${key}`)
-      if (key && key.startsWith('sola-global-monthly-allocation-')) {
-        console.log(`[Azure Data Viewer] Found monthly allocation key: ${key}`)
-        // Extract month from key like "sola-global-monthly-allocation-2025-10"
-        const monthKey = key.replace('sola-global-monthly-allocation-', '')
-        availableMonths.push(monthKey)
-        console.log(`[Azure Data Viewer] Extracted monthKey: ${monthKey}`)
-      }
-    }
-    console.log(`[Azure Data Viewer] Final availableMonths array:`, availableMonths)
-    
-    // Remove duplicates and sort chronologically
-    const uniqueMonths = Array.from(new Set(availableMonths))
-    uniqueMonths.sort((a, b) => {
-      const [yearA, monthA] = a.split('-').map(Number)
-      const [yearB, monthB] = b.split('-').map(Number)
-      return (yearA * 12 + monthA) - (yearB * 12 + monthB)
-    })
-    
-    console.log('[Azure Data Viewer] Found available months:', uniqueMonths)
-    
-    for (const monthKey of uniqueMonths) {
-      console.log(`[Azure Data Viewer] Processing monthKey: ${monthKey}`)
-      try {
-        // Find all monthly allocations for this month
-        const monthAllocations: any[] = []
-        
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i)
-          console.log(`[Azure Data Viewer] Checking for key: ${key} against target: sola-global-monthly-allocation-${monthKey}`)
-          if (key && key === `sola-global-monthly-allocation-${monthKey}`) {
-            const localData = localStorage.getItem(key)
-            console.log(`[Azure Data Viewer] Found monthly allocation data for key: ${key}`)
-            if (localData) {
-              const items = JSON.parse(localData)
-              console.log(`[Azure Data Viewer] Parsed items for ${key}:`, items)
-              console.log(`[Azure Data Viewer] Items is array:`, Array.isArray(items))
-              console.log(`[Azure Data Viewer] Items length:`, items?.length || 0)
-              if (Array.isArray(items)) {
-                monthAllocations.push(...items)
-                console.log(`[Azure Data Viewer] Added ${items.length} items, total now: ${monthAllocations.length}`)
+    try {
+      console.log('[Azure Data Viewer] Loading monthly allocation months from enhanced API')
+      const listResp = await fetch('/api/azure/enhanced/monthly-allocation/all')
+      if (listResp.ok) {
+        const body = await listResp.json()
+        const months = (body.months || []).map((m: any) => m.monthKey).filter(Boolean)
+        months.sort((a: string, b: string) => {
+          const [yearA, monthA] = a.split('-').map(Number)
+          const [yearB, monthB] = b.split('-').map(Number)
+          return (yearA * 12 + monthA) - (yearB * 12 + monthB)
+        })
+
+        for (const monthKey of months) {
+          try {
+            const resp = await fetch(`/api/azure/enhanced/monthly-allocation?monthKey=${encodeURIComponent(monthKey)}`)
+            if (resp.ok) {
+              const data = await resp.json()
+              const items = data.items || []
+              if (Array.isArray(items) && items.length > 0) {
+                allocationData.push({ monthKey, items, count: items.length })
               }
             }
+          } catch (err) {
+            console.log(`[Azure Data Viewer] Failed to load monthly allocation for ${monthKey}:`, err)
           }
         }
-        
-        console.log(`[Azure Data Viewer] Final monthAllocations for ${monthKey}:`, monthAllocations)
-        console.log(`[Azure Data Viewer] monthAllocations.length > 0:`, monthAllocations.length > 0)
-        
-        if (monthAllocations.length > 0) {
-          allocationData.push({
-            monthKey,
-            items: monthAllocations,
-            count: monthAllocations.length
-          })
-          console.log(`[Azure Data Viewer] Added to allocationData, new total: ${allocationData.length}`)
-        }
-      } catch (error) {
-        console.log(`No expense allocation data for ${monthKey}:`, error)
+      } else {
+        console.log('[Azure Data Viewer] monthly-allocation list endpoint returned non-ok')
       }
+    } catch (err) {
+      console.log('[Azure Data Viewer] Failed to list monthly allocations via API:', err)
     }
     setMonthlyAllocations(allocationData)
-    
-    // Load lock states for all available months
+
+    // Load lock states via enhanced API
     const lockData: LockStateData[] = []
-    
-    // Discover all available months from localStorage for lock states
-    const availableLockMonths: string[] = []
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key && key.startsWith('sola-lock-state-')) {
-        const monthKey = key.replace('sola-lock-state-', '')
-        availableLockMonths.push(monthKey)
-      }
-    }
-    
-    // Sort months chronologically
-    availableLockMonths.sort((a, b) => {
-      const [yearA, monthA] = a.split('-').map(Number)
-      const [yearB, monthB] = b.split('-').map(Number)
-      return (yearA * 12 + monthA) - (yearB * 12 + monthB)
-    })
-    
-    console.log('[Azure Data Viewer] Found available lock months:', availableLockMonths)
-    
-    for (const monthKey of availableLockMonths) {
-      try {
-        // Check localStorage first
-        const localData = localStorage.getItem(`sola-lock-state-${monthKey}`)
-        console.log(`[Azure Data Viewer] Lock state for ${monthKey}:`, {
-          localStorageData: localData,
-          isLocked: localData === 'true'
+    try {
+      console.log('[Azure Data Viewer] Loading lock state months from enhanced API')
+      const lockListResp = await fetch('/api/azure/enhanced/lock-state/all')
+      if (lockListResp.ok) {
+        const body = await lockListResp.json()
+        const months = (body.months || []).map((m: any) => m.monthKey).filter(Boolean)
+        months.sort((a: string, b: string) => {
+          const [yearA, monthA] = a.split('-').map(Number)
+          const [yearB, monthB] = b.split('-').map(Number)
+          return (yearA * 12 + monthA) - (yearB * 12 + monthB)
         })
-        if (localData !== null) {
-          lockData.push({
-            monthKey,
-            isLocked: localData === 'true'
-          })
+
+        for (const monthKey of months) {
+          try {
+            const resp = await fetch(`/api/azure/enhanced/lock-state?monthKey=${encodeURIComponent(monthKey)}`)
+            if (resp.ok) {
+              const data = await resp.json()
+              lockData.push({ monthKey, isLocked: Boolean(data.isLocked), lockedBy: data.lockedBy, lockedAt: data.lockedAt })
+            }
+          } catch (err) {
+            console.log(`[Azure Data Viewer] Failed to load lock state for ${monthKey}:`, err)
+          }
         }
-      } catch (error) {
-        console.log(`No lock state data for ${monthKey}`)
       }
+    } catch (err) {
+      console.log('[Azure Data Viewer] Failed to list lock states via API:', err)
     }
     setLockStates(lockData)
     

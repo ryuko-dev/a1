@@ -277,13 +277,12 @@ export default function PlanningPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse border border-gray-300 text-sm">
+              <table className="w-full border-collapse border border-gray-300 text-xs">
                 <thead>
                   <tr className="bg-gray-50">
-                    <th className="border border-gray-300 px-2 py-1 text-left font-semibold text-gray-700 text-xs">Department</th>
-                    <th className="border border-gray-300 px-2 py-1 text-left font-semibold text-gray-700 text-xs">Staff Name</th>
+                    <th className="border border-gray-300 px-2 py-0.5 text-left font-semibold text-gray-700 text-xs">Staff Name</th>
                     {displayMonths.map((month) => (
-                      <th key={month.globalIndex} className="border border-gray-300 px-1 py-1 text-center font-semibold text-gray-700 text-xs min-w-16">
+                      <th key={month.globalIndex} className="border border-gray-300 px-1 py-0.5 text-center font-semibold text-gray-700 text-xs min-w-16">
                         {month.name.slice(0, 3)}
                       </th>
                     ))}
@@ -294,22 +293,21 @@ export default function PlanningPage() {
                     <React.Fragment key={department}>
                       {/* Department header row */}
                       <tr className="bg-gray-100">
-                        <td className="border border-gray-300 px-2 py-1 font-semibold text-gray-700 text-xs" colSpan={2 + displayMonths.length}>
+                        <td className="border border-gray-300 px-2 py-0.5 font-semibold text-gray-700 text-xs" colSpan={1 + displayMonths.length}>
                           {department} ({staffList.length} staff)
                         </td>
                       </tr>
                       {/* Staff rows for this department */}
                       {staffList.map((staff: any) => (
                         <tr key={staff.id} className="hover:bg-gray-50">
-                          <td className="border border-gray-300 px-2 py-1"></td>
-                          <td className="border border-gray-300 px-2 py-1 font-medium text-xs">
+                          <td className="border border-gray-300 px-2 py-0.5 font-medium text-xs">
                             {staff.name}
                           </td>
                           {staff.monthData.map((monthData: any) => {
                             if (monthData.status === 'ended') {
                               return (
                                 <td key={monthData.monthIndex} className="border border-gray-300 p-0.5 text-center">
-                                  <div className="w-full h-6 flex items-center justify-center text-[8px] font-semibold text-gray-500 bg-gray-200">
+                                  <div className="w-full h-5 flex items-center justify-center text-[8px] font-semibold text-gray-500 bg-gray-200">
                                     ended
                                   </div>
                                 </td>
@@ -317,7 +315,7 @@ export default function PlanningPage() {
                             } else if (monthData.status === 'not started') {
                               return (
                                 <td key={monthData.monthIndex} className="border border-gray-300 p-0.5 text-center">
-                                  <div className="w-full h-6 flex items-center justify-center text-[8px] font-semibold text-gray-500 bg-gray-200">
+                                  <div className="w-full h-5 flex items-center justify-center text-[8px] font-semibold text-gray-500 bg-gray-200">
                                     not started
                                   </div>
                                 </td>
@@ -332,22 +330,20 @@ export default function PlanningPage() {
                               return (
                                 <td key={monthData.monthIndex} className="border border-gray-300 p-0.5 text-center">
                                   {monthData.available > 0 ? (
-                                    <div className="w-full h-6 flex flex-col justify-center">
-                                      <div className="w-full h-3 bg-gray-200 rounded mb-0.5">
-                                        <div 
-                                          className="h-full rounded transition-all duration-300"
-                                          style={{ 
-                                            width: `${Math.min(100, monthData.totalAllocated)}%`,
-                                            backgroundColor: barColor
-                                          }}
-                                        />
-                                      </div>
-                                      <div className="text-[8px] font-bold text-blue-600">
-                                        {Math.round(monthData.available)}%
+                                    // Use the cell itself as the bar: the td is the track, inner div is the fill
+                                    <div className="w-full h-5 relative bg-gray-200 rounded overflow-hidden">
+                                      <div
+                                        className="absolute left-0 top-0 bottom-0 h-full transition-all duration-300 flex items-center justify-center text-[9px] font-bold text-white"
+                                        style={{
+                                          width: `${Math.min(100, monthData.totalAllocated)}%`,
+                                          backgroundColor: barColor
+                                        }}
+                                      >
+                                        <span className="px-1">{Math.round(monthData.available)}%</span>
                                       </div>
                                     </div>
                                   ) : (
-                                    <div className="w-full h-6 flex items-center justify-center text-[8px] font-semibold text-gray-400">
+                                    <div className="w-full h-5 flex items-center justify-center text-[8px] font-semibold text-gray-400">
                                       0%
                                     </div>
                                   )}

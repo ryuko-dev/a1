@@ -151,6 +151,7 @@ export class AzureStorageEnhanced {
       }
 
       let entityCount = 0
+      let latestTimestamp: string | undefined = undefined
       for await (const entity of entities) {
         entityCount++
         console.log('[Azure Enhanced] Found entity:', {
@@ -167,6 +168,12 @@ export class AzureStorageEnhanced {
           hasUserPayrollData: data.users?.[0]?.payrollDataByMonth ? true : false
         })
         Object.assign(result, data)
+        // Capture latest Timestamp for optimistic checks
+        const ts = (entity as any).Timestamp
+        if (ts) {
+          const iso = new Date(ts).toISOString()
+          if (!latestTimestamp || iso > latestTimestamp) latestTimestamp = iso
+        }
       }
 
       console.log('[Azure Enhanced] Total entities found:', entityCount)
@@ -175,6 +182,15 @@ export class AzureStorageEnhanced {
         projectsCount: result.projects?.length || 0,
         hasUserPayrollData: result.users?.[0]?.payrollDataByMonth ? true : false
       })
+
+      // Attach lastModified metadata for optimistic concurrency
+      if (latestTimestamp) {
+        try {
+          ;(result as any).lastModified = latestTimestamp
+        } catch (e) {
+          // ignore
+        }
+      }
 
       return result
     } catch (error) {
@@ -272,9 +288,61 @@ export class AzureStorageEnhanced {
     try {
       const entity = await monthlyAllocationTableClient.getEntity("allocation", monthKey)
       const data = entity as any
-      return data.items || []
+
+      const rawItems = data.items
+      if (!rawItems) return []
+
+      // If items were stored as a JSON string (common with Table storage), parse it
+      if (typeof rawItems === 'string') {
+        try {
+          const parsed = JSON.parse(rawItems)
+          return Array.isArray(parsed) ? parsed : []
+        } catch (err) {
+          console.warn('[Azure Enhanced] Failed to parse stringified monthly items for', monthKey)
+          return []
+        }
+      }
+
+      // If items already an array, return as-is
+      if (Array.isArray(rawItems)) return rawItems
+
+      return []
     } catch (error) {
       // Entity doesn't exist, return empty array
+      return []
+    }
+  }
+
+  // List available monthly allocation monthKeys (and optional metadata)
+  async listMonthlyAllocations(): Promise<{ monthKey: string, itemsCount: number, lastModified?: string }[]> {
+    if (!monthlyAllocationTableClient) return []
+
+    try {
+      const result: { monthKey: string, itemsCount: number, lastModified?: string }[] = []
+      const entities = monthlyAllocationTableClient.listEntities()
+      for await (const e of entities) {
+        const monthKey = (e.rowKey as string) || ''
+        const rawItems = (e as any).items
+        let itemsCount = 0
+
+        if (rawItems) {
+          if (Array.isArray(rawItems)) itemsCount = rawItems.length
+          else if (typeof rawItems === 'string') {
+            try {
+              const parsed = JSON.parse(rawItems)
+              if (Array.isArray(parsed)) itemsCount = parsed.length
+            } catch (err) {
+              // ignore parse errors
+            }
+          }
+        }
+
+        const lastModified = (e as any).Timestamp ? new Date((e as any).Timestamp).toISOString() : undefined
+        result.push({ monthKey, itemsCount, lastModified })
+      }
+      return result
+    } catch (error) {
+      console.error('Failed to list monthly allocations:', error)
       return []
     }
   }
@@ -283,14 +351,15 @@ export class AzureStorageEnhanced {
     if (!monthlyAllocationTableClient) return
 
     try {
-      const entity: MonthlyAllocationData = {
+      // Store items as a JSON string to avoid type/coercion issues with Table storage
+      const entity: any = {
         partitionKey: "allocation",
         rowKey: monthKey,
-        items
+        items: JSON.stringify(items)
       }
 
       await monthlyAllocationTableClient.upsertEntity(entity)
-      console.log(`Monthly allocation for ${monthKey} saved to Azure successfully`)
+      console.log(`Monthly allocation for ${monthKey} saved to Azure successfully (${items.length} items)`)
     } catch (error) {
       console.error(`Failed to save monthly allocation for ${monthKey}:`, error)
     }
@@ -307,6 +376,27 @@ export class AzureStorageEnhanced {
     } catch (error) {
       // Entity doesn't exist, return false
       return false
+    }
+  }
+
+  // List available lock state monthKeys
+  async listLockStates(): Promise<{ monthKey: string, isLocked: boolean, lockedBy?: string, lockedAt?: string }[]> {
+    if (!lockStatesTableClient) return []
+
+    try {
+      const result: { monthKey: string, isLocked: boolean, lockedBy?: string, lockedAt?: string }[] = []
+      const entities = lockStatesTableClient.listEntities()
+      for await (const e of entities) {
+        const monthKey = (e.rowKey as string) || ''
+        const isLocked = Boolean((e as any).isLocked)
+        const lockedBy = (e as any).lockedBy
+        const lockedAt = (e as any).lockedAt
+        result.push({ monthKey, isLocked, lockedBy, lockedAt })
+      }
+      return result
+    } catch (error) {
+      console.error('Failed to list lock states:', error)
+      return []
     }
   }
 

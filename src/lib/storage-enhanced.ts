@@ -167,10 +167,13 @@ export async function updateUserSettings(settings: Partial<GlobalData>): Promise
     })
     
     // Save the merged data
+    const clientLast = (currentData as any).lastModified || null
     const response = await fetch('/api/azure/enhanced/main', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-save-caller': new Error().stack?.split('\n')[2]?.trim() || 'unknown',
+        'x-client-lastmodified': clientLast || ''
       },
       body: JSON.stringify(updatedData),
     })
@@ -210,10 +213,21 @@ export async function setCurrentUserData(data: Partial<GlobalData>): Promise<voi
   // USE ENHANCED AZURE STORAGE ONLY
   try {
     console.log(`[${timestamp}] [Enhanced Storage] Trying to save to Azure enhanced storage...`)
+    // Fetch current server metadata to include client lastModified for optimistic checks
+    let clientLast: string | null = null
+    try {
+      const currentServer = await getGlobalData()
+      clientLast = (currentServer as any).lastModified || null
+    } catch (e) {
+      console.warn(`[${timestamp}] [Enhanced Storage] Failed to fetch server metadata for optimistic check:`, e)
+    }
+
     const response = await fetch('/api/azure/enhanced/main', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-save-caller': new Error().stack?.split('\n')[2]?.trim() || 'unknown',
+        'x-client-lastmodified': clientLast || ''
       },
       body: JSON.stringify(data),
     })
