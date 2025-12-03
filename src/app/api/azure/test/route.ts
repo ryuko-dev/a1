@@ -1,39 +1,38 @@
 import { NextResponse } from 'next/server'
-import { azureStorage } from '@/lib/azure-storage'
-import { TableServiceClient, AzureSASCredential } from "@azure/data-tables"
+import { azureStorageEnhanced } from '@/lib/azure-enhanced'
 
 export async function GET() {
   try {
-    console.log('[Test] Starting Azure connection test...')
+    console.log('[Test] Starting Azure enhanced connection test...')
     
     // Test Azure status
-    const status = azureStorage.getAzureStatus()
-    console.log('[Test] Azure status:', status)
+    const status = azureStorageEnhanced.getAzureStatus()
+    console.log('[Test] Azure enhanced status:', status)
     
     // Test table initialization
     let initTableError = null
     try {
-      console.log('[Test] Initializing table...')
-      await azureStorage.initializeTable()
-      console.log('[Test] Table initialization successful')
+      console.log('[Test] Initializing enhanced tables...')
+      await azureStorageEnhanced.initializeTables()
+      console.log('[Test] Enhanced tables initialization successful')
     } catch (error: any) {
-      console.error('[Test] Table initialization failed:', error.message)
+      console.error('[Test] Enhanced tables initialization failed:', error.message)
       initTableError = error.message
     }
     
-    // Test connection through azureStorage
+    // Test connection through azureStorageEnhanced
     let connectionTest = false
     try {
-      connectionTest = await azureStorage.testConnection()
-      console.log('[Test] AzureStorage connection test result:', connectionTest)
+      connectionTest = await azureStorageEnhanced.testConnection()
+      console.log('[Test] AzureStorageEnhanced connection test result:', connectionTest)
     } catch (error: any) {
-      console.log('[Test] AzureStorage connection test failed:', error.message)
+      console.log('[Test] AzureStorageEnhanced connection test failed:', error.message)
     }
     
     // Test basic operations
     let getDataError = null
     try {
-      await azureStorage.getGlobalData()
+      await azureStorageEnhanced.getGlobalData()
       console.log('[Test] getGlobalData successful')
     } catch (error: any) {
       console.log('[Test] getGlobalData failed:', error.message)

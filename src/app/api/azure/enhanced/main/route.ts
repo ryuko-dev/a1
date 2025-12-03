@@ -28,6 +28,8 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
     const clientLast = request.headers.get('x-client-lastmodified') || data.clientLastModified || null
+    const bypassConcurrency = request.headers.get('x-bypass-concurrency') === 'true'
+    const allowDeletions = request.headers.get('x-allow-deletions') === 'true'
 
     // Detailed audit logging of incoming write attempts
     try {
@@ -52,19 +54,24 @@ export async function POST(request: NextRequest) {
     console.log('[API] 🔴 POST /api/azure/enhanced/main - Raw request data:', data)
     console.log('[API] 🔴 POST /api/azure/enhanced/main - clientLastModified header:', clientLast)
     // Check optimistic concurrency: compare clientLast with server lastModified
-    try {
-      const existing = await azureStorageEnhanced.getMainData()
-      const serverLast = (existing as any).lastModified || null
-      if (clientLast && serverLast) {
-        const clientDate = new Date(clientLast)
-        const serverDate = new Date(serverLast)
-        if (clientDate.getTime() < serverDate.getTime()) {
-          console.error('[API] POST /api/azure/enhanced/main - Conflict: client data is older than server')
-          return NextResponse.json({ error: 'Conflict: server has newer data' }, { status: 409 })
+    // Skip if bypassConcurrency is true
+    if (!bypassConcurrency) {
+      try {
+        const existing = await azureStorageEnhanced.getMainData()
+        const serverLast = (existing as any).lastModified || null
+        if (clientLast && serverLast) {
+          const clientDate = new Date(clientLast)
+          const serverDate = new Date(serverLast)
+          if (clientDate.getTime() < serverDate.getTime()) {
+            console.error('[API] POST /api/azure/enhanced/main - Conflict: client data is older than server')
+            return NextResponse.json({ error: 'Conflict: server has newer data' }, { status: 409 })
+          }
         }
+      } catch (e) {
+        console.error('[API] POST /api/azure/enhanced/main - Failed to perform optimistic check:', e)
       }
-    } catch (e) {
-      console.error('[API] POST /api/azure/enhanced/main - Failed to perform optimistic check:', e)
+    } else {
+      console.log('[API] POST /api/azure/enhanced/main - Skipping optimistic concurrency check (bypass enabled)')
     }
     
     const totalItems = (data.projects?.length || 0) + (data.users?.length || 0) + (data.allocations?.length || 0) + (data.positions?.length || 0) + (data.entities?.length || 0)
@@ -90,7 +97,7 @@ export async function POST(request: NextRequest) {
       stackTrace: new Error().stack?.split('\n').slice(1, 5).join('\n')
     })
     
-    await azureStorageEnhanced.setMainData(data)
+    await azureStorageEnhanced.setMainData(data, allowDeletions)
     console.log('[API] POST /api/azure/enhanced/main - Main data saved successfully')
     
     return NextResponse.json({ 

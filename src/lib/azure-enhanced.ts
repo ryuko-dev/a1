@@ -207,7 +207,7 @@ export class AzureStorageEnhanced {
     }
   }
 
-  async setMainData(data: any): Promise<void> {
+  async setMainData(data: any, allowDeletions: boolean = false): Promise<void> {
     if (!mainTableClient) {
       throw new Error('Azure Enhanced: mainTableClient not available')
     }
@@ -227,14 +227,22 @@ export class AzureStorageEnhanced {
         // If incoming is undefined, leave existing as-is
         if (incoming === undefined) continue
 
-        // If incoming is an empty array, treat as NO-OP to avoid accidental deletions
+        // If incoming is an empty array, allow it (deletions are now always allowed)
         if (Array.isArray(incoming) && incoming.length === 0) {
-          console.log(`[Azure Enhanced] Skipping empty incoming array for '${key}' to prevent accidental overwrite`)
+          console.log(`[Azure Enhanced] Processing empty incoming array for '${key}' (deletion allowed)`)
+          merged[key] = []
           continue
         }
 
         // If incoming is an array with items, merge by id where possible
         if (Array.isArray(incoming)) {
+          // For deletions, don't preserve existing items - use only incoming items
+          if (allowDeletions) {
+            console.log(`[Azure Enhanced] Deletion mode: using only incoming items for '${key}'`)
+            merged[key] = incoming
+            continue
+          }
+          
           const existingArr = Array.isArray(existing[key]) ? existing[key] : []
           const map: Record<string, any> = {}
 

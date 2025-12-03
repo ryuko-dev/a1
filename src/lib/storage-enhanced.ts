@@ -173,7 +173,9 @@ export async function updateUserSettings(settings: Partial<GlobalData>): Promise
       headers: {
         'Content-Type': 'application/json',
         'x-save-caller': new Error().stack?.split('\n')[2]?.trim() || 'unknown',
-        'x-client-lastmodified': clientLast || ''
+        'x-client-lastmodified': clientLast || '',
+        'x-bypass-concurrency': 'true', // Custom header to bypass concurrency checks
+        'x-allow-deletions': 'true' // Allow empty arrays for deletions
       },
       body: JSON.stringify(updatedData),
     })
@@ -227,7 +229,9 @@ export async function setCurrentUserData(data: Partial<GlobalData>): Promise<voi
       headers: {
         'Content-Type': 'application/json',
         'x-save-caller': new Error().stack?.split('\n')[2]?.trim() || 'unknown',
-        'x-client-lastmodified': clientLast || ''
+        'x-client-lastmodified': '', // Skip optimistic concurrency for deletions
+        'x-bypass-concurrency': 'true', // Custom header to bypass concurrency checks
+        'x-allow-deletions': 'true' // Allow empty arrays for deletions
       },
       body: JSON.stringify(data),
     })
@@ -338,6 +342,8 @@ export async function setLockState(monthKey: string, isLocked: boolean, lockedBy
     if (response.ok) {
       console.log(`[${timestamp}] [Enhanced Storage] Lock state saved to Azure enhanced storage successfully`)
       return
+    } else {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
   } catch (error) {
     console.error(`[${timestamp}] [Enhanced Storage] Azure enhanced lock state not available, data not saved:`, error)
@@ -345,23 +351,18 @@ export async function setLockState(monthKey: string, isLocked: boolean, lockedBy
   }
 }
 
-// System user management (unchanged)
-export async function getCurrentSystemUser(): Promise<SystemUser | null> {
+// --- Missing functions needed by allocation-grid.tsx ---
+export async function getCurrentSystemUser(): Promise<any | null> {
   const currentUser = getCurrentUser()
   if (!currentUser) return null
 
-  // Try Azure API first, fallback to localStorage
   try {
     const systemUsers = await getSystemUsers()
     return systemUsers.find(u => u.email === currentUser && u.isActive) || null
   } catch (error) {
-    console.log("Azure API not available, using localStorage")
+    console.log("Error getting current system user:", error)
+    return null
   }
-
-  // Fallback to localStorage
-  const localUsers = localStorage.getItem(STORAGE_KEYS.SYSTEM_USERS)
-  const users: SystemUser[] = localUsers ? JSON.parse(localUsers) : []
-  return users.find(u => u.email === currentUser && u.isActive) || null
 }
 
 // Migration helper

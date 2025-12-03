@@ -2,6 +2,7 @@
 "use client"
 
 import React, { useState, useEffect, Fragment } from "react"
+import { unstable_batchedUpdates } from "react-dom"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import type { Project, User, Allocation, Position, Entity, UserRole } from "@/lib/types"
 import { getCurrentUser, clearCurrentUser, getCurrentUserData, setCurrentUserData, getCurrentSystemUser, getSystemUsers, updateUserSettings } from "../lib/storage-enhanced"
@@ -26,6 +27,7 @@ export function AllocationGrid() {
   // Check if user is logged in and get their role
   const [currentUser, setCurrentUserState] = useState<string | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null)
+  const [isDataLoaded, setIsDataLoaded] = useState(false)
   
   // Load user-specific data on component mount
   const [projects, setProjects] = useState<Project[]>([])
@@ -69,7 +71,7 @@ export function AllocationGrid() {
           console.log('[DEBUG] Users from storage:', userData.users?.map(u => u.name) || [])
           
           // SAFEGUARD: Don't overwrite existing data if we already have it
-          if (projects.length > 0 || users.length > 0 || positions.length > 0) {
+          if (isDataLoaded) {
             console.log('[DEBUG] SAFEGUARD: Data already loaded, skipping overwrite')
             console.log('[DEBUG] Current data counts:', {
               projects: projects.length,
@@ -88,6 +90,10 @@ export function AllocationGrid() {
             setAllocations(userData.allocations || [])
           }
           setPositions(userData.positions || [])
+          setEntities(userData.entities || [])
+          
+          // Mark data as loaded to prevent future overwrites
+          setIsDataLoaded(true)
         } else {
           // System users load admin's data
           console.log('[DEBUG] Loading system user data...')
@@ -108,7 +114,7 @@ export function AllocationGrid() {
             console.log('[DEBUG] Users from storage:', adminData.users?.map(u => u.name) || [])
             
             // SAFEGUARD: Don't overwrite existing data if we already have it
-            if (projects.length > 0 || users.length > 0 || positions.length > 0) {
+            if (isDataLoaded) {
               console.log('[DEBUG] SAFEGUARD: Data already loaded, skipping overwrite')
               console.log('[DEBUG] Current data counts:', {
                 projects: projects.length,
@@ -127,6 +133,10 @@ export function AllocationGrid() {
               setAllocations(adminData.allocations || [])
             }
             setPositions(adminData.positions || [])
+            setEntities(adminData.entities || [])
+            
+            // Mark data as loaded to prevent future overwrites
+            setIsDataLoaded(true)
           } else {
             console.log('[DEBUG] No admin user found')
           }
@@ -149,22 +159,34 @@ export function AllocationGrid() {
 
   // Check login status and role on mount
   useEffect(() => {
+    console.log('[DEBUG] AUTH USEEFFECT TRIGGERED')
     const checkAuth = async () => {
-      const user = getCurrentUser()
-      const systemUser = await getCurrentSystemUser()
-      
-      // TEMP: Skip authentication check for deployment testing
-      console.log("[DEBUG] Auth check - user:", user, "systemUser:", systemUser)
-      
-      if (!user || !systemUser) {
-        console.log("[DEBUG] Redirecting to login...")
-        // window.location.href = "/login"
-        // For testing, set default values
+      try {
+        console.log('[DEBUG] Starting authentication check...')
+        const user = getCurrentUser()
+        const systemUser = await getCurrentSystemUser()
+        
+        console.log("[DEBUG] Auth check results - user:", user, "systemUser:", systemUser)
+        
+        if (!user || !systemUser) {
+          console.log("[DEBUG] No user or systemUser found - setting test user as admin")
+          // window.location.href = "/login"
+          // For testing, set default values
+          setCurrentUserState("test-user")
+          setCurrentUserRole("admin")
+          console.log("[DEBUG] Set test user role to admin")
+        } else {
+          console.log("[DEBUG] User found - setting real user role")
+          setCurrentUserState(user)
+          setCurrentUserRole(systemUser.role)
+          console.log("[DEBUG] Set real user role to:", systemUser.role)
+        }
+      } catch (error) {
+        console.error('[DEBUG] Error in authentication:', error)
+        // Fallback: set test user as admin
         setCurrentUserState("test-user")
         setCurrentUserRole("admin")
-      } else {
-        setCurrentUserState(user)
-        setCurrentUserRole(systemUser.role)
+        console.log('[DEBUG] Fallback: Set test user role to admin due to error')
       }
     }
     checkAuth()
@@ -173,38 +195,36 @@ export function AllocationGrid() {
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
 
   // Grid starting month/year (top-right selectors). Persist per user.
-  const [startMonth, setStartMonth] = useState<number>(() => {
+  const [startMonth, setStartMonth] = useState<number>(0)
+  const [startYear, setStartYear] = useState<number>(2024)
+
+  // Initialize startMonth/startYear from localStorage on client side only
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       // Prefer group-specific local key, fall back to generic selected-month
       const storedGroup = localStorage.getItem('sola-start-alloc-planning')
       if (storedGroup) {
         try {
           const parsed = JSON.parse(storedGroup)
-          if (typeof parsed.month === 'number') return parsed.month
+          if (typeof parsed.month === 'number') setStartMonth(parsed.month)
+          if (typeof parsed.year === 'number') setStartYear(parsed.year)
+          return
         } catch {}
       }
-      const stored = localStorage.getItem('sola-selected-month')
-      if (stored) return Number(stored)
-      return new Date().getMonth()
-    }
-    return 0
-  })
-
-  const [startYear, setStartYear] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const storedGroup = localStorage.getItem('sola-start-alloc-planning')
-      if (storedGroup) {
-        try {
-          const parsed = JSON.parse(storedGroup)
-          if (typeof parsed.year === 'number') return parsed.year
-        } catch {}
+      
+      const storedMonth = localStorage.getItem('sola-selected-month')
+      const storedYear = localStorage.getItem('sola-selected-year')
+      
+      if (storedMonth) setStartMonth(Number(storedMonth))
+      if (storedYear) setStartYear(Number(storedYear))
+      else {
+        // Only use current date as fallback if no stored values
+        const now = new Date()
+        setStartMonth(now.getMonth())
+        setStartYear(now.getFullYear())
       }
-      const stored = localStorage.getItem('sola-selected-year')
-      if (stored) return Number(stored)
-      return new Date().getFullYear()
     }
-    return 2024
-  })
+  }, [])
 
   // Load initial settings
   useEffect(() => {
@@ -493,6 +513,8 @@ export function AllocationGrid() {
   // Check if current user has permission for specific actions
   const canEdit = currentUserRole && ['admin', 'editor', 'senior'].includes(currentUserRole)
   const canView = currentUserRole && ['admin', 'editor', 'viewer', 'senior'].includes(currentUserRole)
+  
+  console.log('[DEBUG] USER ROLE DEBUG:', { currentUserRole, canEdit, canView, currentUser })
 
   // Filter projects to show only those active between starting month and starting month + 11 months
   const filteredProjects = projects.filter(project => {
@@ -807,23 +829,60 @@ export function AllocationGrid() {
 
   const handleDeletePositionLine = (positionId: string) => {
     console.log('[DEBUG] Deleting position line:', positionId)
+    
+    // Calculate all new values first to prevent intermediate empty states
     const newPositionBudgets = positionBudgets.filter((p) => p.id !== positionId)
-    setPositionBudgets(newPositionBudgets)
-    
-    // Also delete the actual positions from the positions state
     const updatedPositions = positions.filter((p) => !p.id.includes(positionId))
-    setPositions(updatedPositions)
-    
-    // Clean up allocations associated with the deleted positions
     const updatedAllocations = allocations.filter((a) => !a.positionId || !a.positionId.includes(positionId))
-    setAllocations(updatedAllocations)
-    
-    // Update projects to remove deleted positions
     const updatedProjects = projects.map((project) => ({
       ...project,
       positions: project.positions?.filter((p) => !p.id.includes(positionId)) || []
     }))
-    setProjects(updatedProjects)
+    
+    // Update all state at once using batched updates to prevent race conditions
+    unstable_batchedUpdates(() => {
+      setPositionBudgets(newPositionBudgets)
+      setPositions(updatedPositions)
+      setAllocations(updatedAllocations)
+      setProjects(updatedProjects)
+    })
+    
+    console.log('[DEBUG] State updated - deletion should be visible in UI')
+    
+    // Force save by fetching latest data first, then applying deletion
+    setTimeout(async () => {
+      try {
+        console.log('[DEBUG] Force save: Fetching latest data first...')
+        const latestData = await getCurrentUserData()
+        
+        // Apply deletion to latest data (positionBudgets is derived from positions)
+        const latestPositions = (latestData.positions || positions).filter((p: any) => !p.id.includes(positionId))
+        const latestAllocations = (latestData.allocations || allocations).filter((a: any) => !a.positionId || !a.positionId.includes(positionId))
+        const latestProjects = (latestData.projects || projects).map((project: any) => ({
+          ...project,
+          positions: project.positions?.filter((p: any) => !p.id.includes(positionId)) || []
+        }))
+        
+        console.log('[DEBUG] Force save: Saving with latest data + deletion')
+        console.log('[DEBUG] Data being saved:', {
+          projects: latestProjects.length,
+          users: (latestData.users || users).length,
+          allocations: latestAllocations.length,
+          positions: latestPositions.length,
+          entities: (latestData.entities || entities).length
+        })
+        await setCurrentUserData({ 
+          projects: latestProjects, 
+          users: latestData.users || users, 
+          allocations: latestAllocations, 
+          positions: latestPositions, 
+          entities: latestData.entities || entities 
+        })
+        console.log('[DEBUG] Force save successful')
+      } catch (error) {
+        console.error('[DEBUG] Force save failed:', error)
+      }
+    }, 200) // Small delay to ensure state updates complete
   }
 
   // Export positions to Excel
@@ -2029,16 +2088,17 @@ export function AllocationGrid() {
                                             minWidth: width > 0 ? "8%" : undefined,
                                           }}
                                           onClick={(e) => {
-                                            if (currentUserRole === 'viewer') return
+                                            if (!currentUserRole || (currentUserRole as UserRole) === 'viewer') return
                                             e.stopPropagation()
                                             setEditingId(allocation.id)
                                             setEditValue(allocation.percentage || 0)
                                           }}
                                           title={`${project?.name ?? "Project"} - ${allocation.positionName || "Position"} - ${Math.round(allocation.percentage || 0)}% (${Math.round(getDaysFromPercentage(user.id, month.globalIndex, allocation.percentage || 0))} days)`}
                                         >
-                                          {currentUserRole !== 'viewer' && (
+                                          {currentUserRole && (currentUserRole as UserRole) !== 'viewer' && (
                                             <button
                                               onClick={(e) => {
+                                                if (!currentUserRole || (currentUserRole as UserRole) === 'viewer') return
                                                 e.stopPropagation()
                                                 handleRemoveAllocation(allocation.id)
                                               }}

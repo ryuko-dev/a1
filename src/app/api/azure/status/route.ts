@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { azureStorage } from '@/lib/azure-storage'
+import { azureStorageEnhanced } from '@/lib/azure-enhanced'
 
 export async function GET() {
   try {
-    const status = azureStorage.getAzureStatus()
+    const status = azureStorageEnhanced.getAzureStatus()
     return NextResponse.json(status)
   } catch (error) {
     console.error('[API] Error getting Azure status:', error)

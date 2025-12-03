@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect } from "react"
 import { Navigation } from "@/components/navigation"
-import { azureStorage } from "@/lib/azure-storage"
 import { azureStorageEnhanced } from "@/lib/azure-enhanced"
-import { GlobalData, SystemUser } from "@/lib/azure-storage"
+import { GlobalData, SystemUser } from "@/lib/azure"
 
 interface CollectionData {
   name: string
@@ -215,7 +214,7 @@ export default function AzureDataViewer() {
       setGlobalData(data)
     } else {
       // Fallback to localStorage if Azure not configured
-      const { getCurrentUserData } = await import("@/lib/storage")
+      const { getCurrentUserData } = await import("@/lib/storage-enhanced")
       const data = await getCurrentUserData()
       setGlobalData(data)
     }
@@ -227,7 +226,7 @@ export default function AzureDataViewer() {
       setSystemUsers(users)
     } else {
       // Fallback to localStorage if Azure not configured
-      const { getSystemUsers } = await import("@/lib/storage")
+      const { getSystemUsers } = await import("@/lib/storage-enhanced")
       const users = await getSystemUsers()
       setSystemUsers(users)
     }

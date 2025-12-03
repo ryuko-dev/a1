@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { azureStorage } from '@/lib/azure-storage'
+import { azureStorageEnhanced } from '@/lib/azure-enhanced'
 
 export async function GET() {
   try {
-    const users = await azureStorage.getSystemUsers()
+    const users = await azureStorageEnhanced.getSystemUsers()
     return NextResponse.json(users)
   } catch (error) {
     console.error('[API] Error getting system users:', error)
@@ -17,7 +17,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const users = await request.json()
-    await azureStorage.setSystemUsers(users)
+    await azureStorageEnhanced.setSystemUsers(users)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('[API] Error setting system users:', error)

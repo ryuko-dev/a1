@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { azureStorage } from '@/lib/azure-storage'
+import { azureStorageEnhanced } from '@/lib/azure-enhanced'
 
 export async function GET() {
   try {
-    console.log('[API] GET /api/azure/data - Fetching global data')
-    const data = await azureStorage.getGlobalData()
+    console.log('[API] GET /api/azure/data - Fetching global data from enhanced storage')
+    const data = await azureStorageEnhanced.getGlobalData()
     console.log('[API] GET /api/azure/data - Success:', {
       projects: data.projects?.length || 0,
       users: data.users?.length || 0,
@@ -25,7 +25,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
-    console.log('[API] POST /api/azure/data - Saving data:', {
+    console.log('[API] POST /api/azure/data - Saving data to enhanced storage:', {
       projects: data.projects?.length || 0,
       users: data.users?.length || 0,
       allocations: data.allocations?.length || 0,
@@ -39,12 +39,12 @@ export async function POST(request: NextRequest) {
       color: p.color
     })))
     
-    await azureStorage.setGlobalData(data)
+    await azureStorageEnhanced.setGlobalData(data)
     console.log('[API] POST /api/azure/data - setGlobalData completed successfully')
     
     // Verify the save by immediately reading it back
     console.log('[API] POST /api/azure/data - Verifying save...')
-    const verifyData = await azureStorage.getGlobalData()
+    const verifyData = await azureStorageEnhanced.getGlobalData()
     console.log('[API] POST /api/azure/data - Verification result:', {
       projects: verifyData.projects?.length || 0,
       users: verifyData.users?.length || 0,
