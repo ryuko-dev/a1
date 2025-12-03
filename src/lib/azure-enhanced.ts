@@ -234,6 +234,27 @@ export class AzureStorageEnhanced {
     }
   }
 
+  // Test Azure storage connection by attempting to read data
+  async testConnection(): Promise<boolean> {
+    if (!isAzureConfigured || !mainTableClient) {
+      return false
+    }
+
+    try {
+      // Try to query the main table to test connectivity
+      const queryOptions = { filter: odata`PartitionKey eq 'test'` }
+      await mainTableClient.listEntities({ queryOptions })
+      return true
+    } catch (error: any) {
+      // 404 is expected for test query, other errors indicate connection issues
+      if (error.statusCode === 404) {
+        return true
+      }
+      console.error('[Azure Enhanced] Connection test failed:', error.message)
+      return false
+    }
+  }
+
   async setMainData(data: any, allowDeletions: boolean = false): Promise<void> {
     if (!mainTableClient) {
       throw new Error('Azure Enhanced: mainTableClient not available')
