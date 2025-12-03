@@ -266,6 +266,17 @@ export class AzureStorageEnhanced {
     }
   }
 
+  // Set system users in the main data
+  async setSystemUsers(users: any[]): Promise<void> {
+    try {
+      const data = await this.getMainData()
+      await this.setMainData({ ...data, users })
+    } catch (error: any) {
+      console.error('[Azure Enhanced] Failed to set system users:', error.message)
+      throw error
+    }
+  }
+
   async setMainData(data: any, allowDeletions: boolean = false): Promise<void> {
     if (!mainTableClient) {
       throw new Error('Azure Enhanced: mainTableClient not available')
