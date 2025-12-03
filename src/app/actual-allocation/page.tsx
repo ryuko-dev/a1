@@ -211,6 +211,31 @@ export default function ActualAllocationPage() {
         const existingFringeData = (user as any).fringeDataByMonth?.[monthKey]
         const existingProjectData = (user as any).projectDataByMonth?.[monthKey]
         
+        // Populate projectDataByMonth from allocation records
+        const projectDataFromAllocations: Record<string, number> = {}
+        
+        // Get the global month index for the selected month/year
+        const globalMonthIndex = (selectedYear - 2024) * 12 + selectedMonth
+        
+        // Find allocations for this user and month
+        const userAllocations = globalData.allocations.filter((a: Allocation) => 
+          a.userId === user.id && 
+          a.monthIndex === globalMonthIndex
+        )
+        
+        // Convert allocations to project data (hours or percentage)
+        userAllocations.forEach((allocation: Allocation) => {
+          const project = globalData.projects.find((p: Project) => p.id === allocation.projectId)
+          if (project && allocation.percentage) {
+            // Convert percentage to hours if needed (assuming 8 hours per day for percentage mode)
+            const workingDays = calculateWorkingDays(user.workDays || 'mon-fri', selectedMonth, selectedYear)
+            const totalHours = workingDays * 8
+            const projectHours = (allocation.percentage / 100) * totalHours
+            
+            projectDataFromAllocations[allocation.projectId] = Math.round(projectHours)
+          }
+        })
+        
         return {
           ...user,
           entity: user.entity || "Unassigned",
@@ -238,7 +263,7 @@ export default function ActualAllocationPage() {
           },
           projectDataByMonth: {
             ...(user as any).projectDataByMonth,
-            [monthKey]: existingProjectData || {}
+            [monthKey]: existingProjectData || projectDataFromAllocations
           }
         }
       })
