@@ -207,6 +207,11 @@ export class AzureStorageEnhanced {
     }
   }
 
+  // Alias for getMainData to maintain compatibility with existing API calls
+  async getGlobalData(): Promise<any> {
+    return this.getMainData()
+  }
+
   async setMainData(data: any, allowDeletions: boolean = false): Promise<void> {
     if (!mainTableClient) {
       throw new Error('Azure Enhanced: mainTableClient not available')
