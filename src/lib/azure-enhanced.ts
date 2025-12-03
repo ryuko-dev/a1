@@ -217,6 +217,23 @@ export class AzureStorageEnhanced {
     return this.setMainData(data, allowDeletions)
   }
 
+  // Get Azure storage status and configuration information
+  async getAzureStatus(): Promise<any> {
+    return {
+      configured: isAzureConfigured,
+      connectionType: useConnectionString ? 'connection-string' : 'separate-credentials',
+      tables: {
+        mainData: !!mainTableClient,
+        monthlyAllocation: !!monthlyAllocationTableClient,
+        lockStates: !!lockStatesTableClient
+      },
+      tableNames: TABLE_NAMES,
+      accountName,
+      hasConnectionString: !!connectionString,
+      hasAccountKey: !!accountKey
+    }
+  }
+
   async setMainData(data: any, allowDeletions: boolean = false): Promise<void> {
     if (!mainTableClient) {
       throw new Error('Azure Enhanced: mainTableClient not available')
